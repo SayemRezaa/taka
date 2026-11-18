@@ -200,7 +200,7 @@ export async function entriesInRange(
   opts: {
     from: string;
     to: string;
-    kind: EntryKind;
+    kind?: EntryKind | null;
     domainId?: string | null;
     limit: number;
   },
@@ -221,7 +221,7 @@ export async function entriesInRange(
     .where(
       and(
         eq(entries.userId, userId),
-        eq(entries.kind, opts.kind),
+        opts.kind ? eq(entries.kind, opts.kind) : undefined,
         gte(entries.occurredOn, opts.from),
         lte(entries.occurredOn, opts.to),
         opts.domainId ? eq(entries.domainId, opts.domainId) : undefined,
@@ -302,4 +302,86 @@ export async function monthsWithData(userId: string): Promise<string[]> {
     .groupBy(sql`date_trunc('month', ${entries.occurredOn})`)
     .orderBy(sql`date_trunc('month', ${entries.occurredOn})`);
   return rows.map((r) => r.month);
+}
+
+/**
+ * An existing entry with the same date, domain and amount.
+ *
+ * The duplicate guard: SR types entries by hand, and an assistant may later
+ * sweep the same spend out of phone notes. Same day, same category, same
+ * amount is overwhelmingly a re-entry rather than a genuine second identical
+ * purchase, so the tool reports it and makes the caller pass force.
+ */
+export async function findDuplicateEntry(
+  userId: string,
+  opts: { occurredOn: string; domainId: string; amountMinor: number },
+) {
+  const [row] = await db
+    .select({
+      id: entries.id,
+      occurredOn: entries.occurredOn,
+      amountMinor: entries.amountMinor,
+      kind: entries.kind,
+      method: entries.method,
+      note: entries.note,
+      domainName: domains.name,
+    })
+    .from(entries)
+    .innerJoin(domains, eq(entries.domainId, domains.id))
+    .where(
+      and(
+        eq(entries.userId, userId),
+        eq(entries.occurredOn, opts.occurredOn),
+        eq(entries.domainId, opts.domainId),
+        eq(entries.amountMinor, opts.amountMinor),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+/** Totals per kind over an inclusive date range, summed by Postgres. */
+export async function totalsByKindForRange(
+  userId: string,
+  from: string,
+  to: string,
+): Promise<MonthTotals> {
+  const rows = await db
+    .select({
+      kind: entries.kind,
+      total: sql<string>`sum(${entries.amountMinor})`,
+    })
+    .from(entries)
+    .where(
+      and(
+        eq(entries.userId, userId),
+        gte(entries.occurredOn, from),
+        lte(entries.occurredOn, to),
+      ),
+    )
+    .groupBy(entries.kind);
+
+  const out: MonthTotals = { expense: 0, income: 0, savings: 0 };
+  for (const r of rows) out[r.kind] = Number(r.total);
+  return out;
+}
+
+/** One entry by id, scoped to its owner. Used to preview an edit or delete. */
+export async function getEntry(userId: string, id: string) {
+  const [row] = await db
+    .select({
+      id: entries.id,
+      occurredOn: entries.occurredOn,
+      amountMinor: entries.amountMinor,
+      kind: entries.kind,
+      method: entries.method,
+      note: entries.note,
+      domainId: entries.domainId,
+      domainName: domains.name,
+    })
+    .from(entries)
+    .innerJoin(domains, eq(entries.domainId, domains.id))
+    .where(and(eq(entries.id, id), eq(entries.userId, userId)))
+    .limit(1);
+  return row ?? null;
 }

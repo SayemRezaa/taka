@@ -140,3 +140,21 @@ export function rangeLabel(from: string, to: string): string {
     ? `${dayLabel(from)} – ${dayLabel(to)} ${ty}`
     : `${dayLabel(from)} ${fy} – ${dayLabel(to)} ${ty}`;
 }
+
+/**
+ * Monday-to-Sunday week containing a date, as inclusive bounds. Monday to
+ * match Postgres `date_trunc('week', ...)` and the chart axis.
+ */
+export function weekBounds(isoDate: string): { from: string; to: string } {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const t = Date.UTC(y, m - 1, d);
+  const monday = t - ((new Date(t).getUTCDay() + 6) % 7) * 86_400_000;
+  return { from: isoOf(monday), to: isoOf(monday + 6 * 86_400_000) };
+}
+
+/** Inclusive bounds of the month containing a date. */
+export function monthBoundsInclusive(isoDate: string): { from: string; to: string } {
+  const [y, m] = isoDate.split("-").map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return { from: `${y}-${pad(m)}-01`, to: `${y}-${pad(m)}-${pad(last)}` };
+}

@@ -5,6 +5,12 @@ import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { domains, entries } from "@/db/schema";
+import {
+  createEntry,
+  editEntry,
+  removeEntry,
+  createDomain,
+} from "@/db/mutations";
 import { requireUser } from "@/lib/supabase/server";
 
 /**
@@ -40,30 +46,9 @@ export async function addEntry(raw: unknown): Promise<ActionResult> {
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid entry." };
   }
-  const input = parsed.data;
 
-  // The domain must belong to THIS user. Without this check, a crafted
-  // request could attach an entry to someone else's category.
-  const [domain] = await db
-    .select({ id: domains.id, kind: domains.kind })
-    .from(domains)
-    .where(and(eq(domains.id, input.domainId), eq(domains.userId, user.id)))
-    .limit(1);
-
-  if (!domain) return { ok: false, error: "That domain doesn't exist." };
-  if (domain.kind !== input.kind) {
-    return { ok: false, error: "That domain is for a different kind of entry." };
-  }
-
-  await db.insert(entries).values({
-    userId: user.id,
-    domainId: input.domainId,
-    occurredOn: input.occurredOn,
-    amountMinor: input.amountMinor,
-    kind: input.kind,
-    method: input.method ?? null,
-    note: input.note ?? null,
-  });
+  const res = await createEntry(user.id, parsed.data);
+  if (!res.ok) return res;
 
   revalidatePath("/ledger");
   return { ok: true };
@@ -79,29 +64,8 @@ export async function updateEntry(raw: unknown): Promise<ActionResult> {
   }
   const { id, ...input } = parsed.data;
 
-  const [domain] = await db
-    .select({ id: domains.id })
-    .from(domains)
-    .where(and(eq(domains.id, input.domainId), eq(domains.userId, user.id)))
-    .limit(1);
-  if (!domain) return { ok: false, error: "That domain doesn't exist." };
-
-  // The userId in the WHERE clause is what makes this safe: an id belonging
-  // to someone else simply matches zero rows.
-  const updated = await db
-    .update(entries)
-    .set({
-      domainId: input.domainId,
-      occurredOn: input.occurredOn,
-      amountMinor: input.amountMinor,
-      kind: input.kind,
-      method: input.method ?? null,
-      note: input.note ?? null,
-    })
-    .where(and(eq(entries.id, id), eq(entries.userId, user.id)))
-    .returning({ id: entries.id });
-
-  if (!updated.length) return { ok: false, error: "Entry not found." };
+  const res = await editEntry(user.id, id, input);
+  if (!res.ok) return res;
 
   revalidatePath("/ledger");
   return { ok: true };
@@ -112,9 +76,8 @@ export async function deleteEntry(id: string): Promise<ActionResult> {
   if (!user) return { ok: false, error: "Sign in to delete entries." };
   if (!z.uuid().safeParse(id).success) return { ok: false, error: "Invalid id." };
 
-  await db
-    .delete(entries)
-    .where(and(eq(entries.id, id), eq(entries.userId, user.id)));
+  const res = await removeEntry(user.id, id);
+  if (!res.ok) return res;
 
   revalidatePath("/ledger");
   return { ok: true };
@@ -131,21 +94,11 @@ export async function addDomain(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid domain." };
   }
 
-  try {
-    const [row] = await db
-      .insert(domains)
-      .values({ userId: user.id, name: parsed.data.name, kind: parsed.data.kind })
-      .returning({ id: domains.id });
-    revalidatePath("/ledger");
-    return { ok: true, id: row.id };
-  } catch (e) {
-    // The unique index on (user_id, lower(name)) is the real guard here —
-    // checking first would race with a double-submit.
-    if (typeof e === "object" && e && "code" in e && e.code === "23505") {
-      return { ok: false, error: "You already have a domain with that name." };
-    }
-    throw e;
-  }
+  const res = await createDomain(user.id, parsed.data);
+  if (!res.ok) return res;
+
+  revalidatePath("/ledger");
+  return { ok: true, id: res.id };
 }
 
 const renameInput = z.object({
