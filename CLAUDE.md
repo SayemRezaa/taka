@@ -208,3 +208,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## SR-Wiki sync contract
+
+`SR-Wiki/_system/sync/sync.mjs` on SR's laptop reads these tables over Supabase REST (secret key) for backups and his knowledge base: entries: id, user_id, domain_id, occurred_on, amount_minor, kind, method, note, created_at, updated_at; domains: id, user_id, name, kind, archived, created_at. Adding tables or columns is fine. **Renaming or dropping any of these breaks the sync**: tell SR first, and update `sync.mjs` in the same change.
