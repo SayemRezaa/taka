@@ -7,6 +7,8 @@ import {
   totalsByKindForRange,
   domainTotalsForRange,
   getEntry,
+  earmarkBalances,
+  totalsByKindAllTime,
 } from "@/db/queries";
 import {
   createEntry,
@@ -30,6 +32,11 @@ import {
   isDuplicateBlocked,
 } from "./format";
 import type { EntryKind } from "@/db/schema";
+import {
+  KIND_LABEL,
+  spendableNet,
+  outstandingDebt,
+} from "@/lib/kinds";
 
 /**
  * The tools an assistant can call. Every one of them:
@@ -42,15 +49,28 @@ import type { EntryKind } from "@/db/schema";
 const AMOUNT_CAP_MINOR = 100_000_000_00;
 
 const kindSchema = z
-  .enum(["expense", "income", "savings"])
+  .enum(["expense", "income", "savings", "loan_in", "loan_out"])
   .describe(
-    "expense = money out, income = money in, savings = money set aside. Savings is not an expense.",
+    "expense = money consumed. income = money earned or received to keep. " +
+      "savings = set aside, leaves the spendable balance but is not consumed. " +
+      "loan_in = borrowed, cash arrives but is owed, NOT income. " +
+      "loan_out = repaid, cash leaves but settles a debt, NOT an expense. " +
+      "Repaying a loan is loan_out, never expense.",
   );
 
 const amountSchema = z
   .union([z.number(), z.string()])
   .describe(
     'Amount in taka, not poisha. A number like 180.5, or a sum as a string like "10+80+30" when combining several jottings.',
+  );
+
+const earmarkSchema = z
+  .string()
+  .max(60)
+  .describe(
+    'Optional label grouping entries that share one pot of money, e.g. "Tuition Nov". ' +
+      "Put the same label on the money coming in and the payment going out, and the " +
+      "remainder is tracked for you. Use list_pots to see labels already in use.",
   );
 
 const dateSchema = z
@@ -182,6 +202,7 @@ export function registerTakaTools(server: McpServer) {
         category: r.domainName,
         method: r.method,
         note: r.note,
+        pot: r.earmark,
       }));
       return reply(
         `${out.length} entries between ${args.from} and ${args.to}.`,
@@ -236,7 +257,9 @@ export function registerTakaTools(server: McpServer) {
           expense: toTaka(kinds.expense),
           income: toTaka(kinds.income),
           savings: toTaka(kinds.savings),
-          net: toTaka(kinds.income - kinds.expense - kinds.savings),
+          borrowed: toTaka(kinds.loan_in),
+          repaid: toTaka(kinds.loan_out),
+          net: toTaka(spendableNet(kinds)),
         },
         by_category: byDomain.map((d) => ({
           category: d.domainName,
@@ -249,6 +272,62 @@ export function registerTakaTools(server: McpServer) {
       return reply(
         `${from} to ${to}: out ${payload.totals.expense}, in ${payload.totals.income}, set aside ${payload.totals.savings}.`,
         payload,
+      );
+    },
+  );
+
+  server.registerTool(
+    "loan_balance",
+    {
+      title: "What is still owed",
+      description:
+        "Everything borrowed less everything repaid, over all time. Use this for \"how much do I owe\" rather than summing entries yourself. Example: {}.",
+      inputSchema: z.object({}),
+    },
+    async (_args, ctx) => {
+      const userId = userIdFrom(ctx.http?.authInfo);
+      const all = await totalsByKindAllTime(userId);
+      const owed = outstandingDebt(all);
+      return reply(
+        owed > 0
+          ? `Still owed: ${toTaka(owed)} taka.`
+          : owed === 0
+            ? "Nothing outstanding."
+            : `Repaid ${toTaka(-owed)} taka more than recorded as borrowed.`,
+        {
+          outstanding: toTaka(owed),
+          borrowed: toTaka(all.loan_in),
+          repaid: toTaka(all.loan_out),
+        },
+      );
+    },
+  );
+
+  server.registerTool(
+    "list_pots",
+    {
+      title: "List pots",
+      description:
+        'Money grouped by earmark label: what came in for each purpose, what went out against it, and what is left. Use this before setting an earmark on a new entry so you reuse an existing label rather than creating a near-duplicate. Example: {} returns [{"pot":"Tuition Nov","in":5000,"out":3000,"remaining":2000}].',
+      inputSchema: z.object({}),
+    },
+    async (_args, ctx) => {
+      const userId = userIdFrom(ctx.http?.authInfo);
+      const pots = await earmarkBalances(userId);
+      const out = pots.map((p) => ({
+        pot: p.earmark,
+        in: toTaka(p.inMinor),
+        out: toTaka(p.outMinor),
+        remaining: toTaka(p.remainingMinor),
+        entries: p.entries,
+        first: p.firstOn,
+        last: p.lastOn,
+      }));
+      return reply(
+        out.length === 0
+          ? "No pots yet."
+          : `${out.length} pots. Labels in use: ${out.map((p) => p.pot).join(", ")}.`,
+        out,
       );
     },
   );
@@ -272,6 +351,7 @@ export function registerTakaTools(server: McpServer) {
           .optional()
           .describe("Cash, bKash, Nagad, Card, Bank."),
         date: dateSchema.optional(),
+        earmark: earmarkSchema.optional(),
         force: z
           .boolean()
           .optional()
@@ -321,6 +401,7 @@ export function registerTakaTools(server: McpServer) {
         kind,
         method: args.method ?? null,
         note: args.note ?? null,
+        earmark: args.earmark ?? null,
       });
       if (!res.ok) return fail(res.error);
 
@@ -354,6 +435,7 @@ export function registerTakaTools(server: McpServer) {
               note: z.string().max(200).optional(),
               method: z.string().max(40).optional(),
               date: dateSchema.optional(),
+              earmark: earmarkSchema.optional(),
             }),
           )
           .min(1)
@@ -403,6 +485,7 @@ export function registerTakaTools(server: McpServer) {
           kind,
           method: item.method ?? null,
           note: item.note ?? null,
+          earmark: item.earmark ?? null,
         });
         if (!res.ok) {
           results.push({ index: i, ok: false, error: res.error });
@@ -472,6 +555,7 @@ export function registerTakaTools(server: McpServer) {
         note: z.string().max(200).optional(),
         method: z.string().max(40).optional(),
         date: dateSchema.optional(),
+        earmark: earmarkSchema.optional(),
         confirm: z.boolean().optional(),
         confirm_token: z.string().optional(),
       }),
@@ -516,6 +600,7 @@ export function registerTakaTools(server: McpServer) {
         kind,
         note: args.note ?? current.note,
         method: args.method ?? current.method,
+        pot: args.earmark ?? current.earmark,
       };
       const token = confirmToken("update", args.id, proposed);
 
@@ -533,6 +618,7 @@ export function registerTakaTools(server: McpServer) {
               kind: current.kind,
               note: current.note,
               method: current.method,
+              pot: current.earmark,
             },
             after: proposed,
           },
@@ -546,6 +632,7 @@ export function registerTakaTools(server: McpServer) {
         kind,
         method: proposed.method,
         note: proposed.note,
+        earmark: proposed.pot,
       });
       if (!res.ok) return fail(res.error);
       return reply(`Updated the entry on ${occurredOn}.`, { ok: true, id: args.id, ...proposed });

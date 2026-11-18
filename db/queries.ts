@@ -215,6 +215,7 @@ export async function entriesInRange(
       kind: entries.kind,
       method: entries.method,
       note: entries.note,
+      earmark: entries.earmark,
       domainId: entries.domainId,
       domainName: domains.name,
     })
@@ -378,6 +379,7 @@ export async function getEntry(userId: string, id: string) {
       kind: entries.kind,
       method: entries.method,
       note: entries.note,
+      earmark: entries.earmark,
       domainId: entries.domainId,
       domainName: domains.name,
     })
