@@ -6,7 +6,7 @@ import { createBrowserClient } from "@supabase/ssr";
 type Mode = "signin" | "signup";
 type State = "idle" | "submitting" | "error" | "check-email";
 
-export function LoginForm() {
+export function LoginForm({ next }: { next?: string | null }) {
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -31,7 +31,7 @@ export function LoginForm() {
         return;
       }
       // Full navigation so middleware sees the fresh session cookie.
-      window.location.assign("/ledger");
+      window.location.assign(next ?? "/ledger");
       return;
     }
 
@@ -42,7 +42,7 @@ export function LoginForm() {
       return;
     }
     if (data.session) {
-      window.location.assign("/ledger");
+      window.location.assign(next ?? "/ledger");
       return;
     }
     // "Confirm email" is on in Supabase — no session until they click the link.
