@@ -36,13 +36,13 @@ merges a patch into the current params — use it rather than building URLs.
 
 ## Repository and deployment
 
-GitHub `AzreMeyas/taka`, SSH remote. Vercel builds and ships `main` on every
+GitHub `SayemRezaa/taka`, SSH remote. Vercel builds and ships `main` on every
 push. The database and auth are one Supabase project.
 
 Picking this up again from a clean machine:
 
 ```bash
-git clone git@github.com:AzreMeyas/taka.git && cd taka
+git clone git@github.com:SayemRezaa/taka.git && cd taka
 cp .env.example .env.local   # then fill in the three values
 npm install && npm run dev
 ```
