@@ -98,6 +98,31 @@ opening the app wakes it, but the first request after a pause is slow.
 
 ---
 
+## MCP connector
+
+Taka exposes a Model Context Protocol server, so an AI assistant can read and
+add entries live. It is authenticated with Supabase's OAuth 2.1 server — no
+API key to paste, and the assistant never sees your password.
+
+**Endpoint:** `https://taka-six.vercel.app/api/mcp`
+
+Add it in claude.ai under Settings > Connectors > Add custom connector, paste
+that URL, and approve the consent screen that opens. Any MCP client works the
+same way; the URL is the whole configuration.
+
+Tools: `list_categories`, `add_entry`, `add_entries_batch`, `list_entries`,
+`summary`, `create_category`, `update_entry`, `delete_entry`. Amounts are in
+taka and may be written as a sum (`"10+80+30"`). Dates are Asia/Dhaka.
+`add_entry` refuses a same-day duplicate unless forced, and update/delete
+preview before they apply.
+
+Access is restricted to the user ids in `MCP_ALLOWED_USER_IDS`. That variable
+fails closed: empty or missing means nobody, including you.
+
+See [docs/MCP-NOTES.md](docs/MCP-NOTES.md) for how the OAuth flow works and
+what each file does, and [ADR 6](docs/decisions/0006-mcp-over-supabase-oauth.md)
+for why it is built this way.
+
 ## Commands
 
 ```bash
@@ -105,6 +130,7 @@ npm run dev         # local dev server
 npm run build       # production build
 npm run typecheck   # tsc --noEmit
 npm run db:generate # regenerate SQL after editing db/schema.ts
+npm test            # vitest, the pure logic behind the MCP tools
 ```
 
 ## Where things live

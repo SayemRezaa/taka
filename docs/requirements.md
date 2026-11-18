@@ -29,7 +29,9 @@ Not a budgeting app. It records what happened; it does not police what should.
 - [ ] Installable PWA with a service worker
 - [ ] CSV export
 - [ ] Month-close screen: what changed vs last month, one reflective question
-- [ ] Archive a domain without deleting its history
+- [x] Archive a domain without deleting its history
+- [x] MCP connector so an assistant can log entries live
+      (see [ADR 6](decisions/0006-mcp-over-supabase-oauth.md))
 
 ## Explicitly not doing
 

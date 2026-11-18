@@ -138,6 +138,27 @@ never bound as a parameter. Postgres only treats a SELECT expression as
 grouped when it is byte-identical to the GROUP BY expression, and `$1` is not
 identical to `$3` even with the same value.
 
+## MCP
+
+`/api/mcp` is a second front door into the same data, for AI clients. It
+authenticates with a Supabase-issued bearer JWT instead of a session cookie.
+
+Rule 2 is not relaxed there: the user id comes from the `sub` claim of a
+token whose signature is verified against Supabase's JWKS, never from tool
+arguments. If you add a tool, take the id from `userIdFrom(ctx.http?.authInfo)`
+and pass it as the first argument, exactly as `db/queries.ts` expects.
+
+Writes go through `db/mutations.ts`, which both the server actions and the
+MCP tools call. Do not add a second copy of a domain-ownership check.
+
+`lib/supabase/middleware.ts` must keep `/api/mcp` and `/.well-known` in
+PUBLIC_PATHS. They authenticate themselves; redirecting them answers a
+protocol request with a login page.
+
+`MCP_ALLOWED_USER_IDS` fails closed — empty means nobody. See
+[docs/MCP-NOTES.md](docs/MCP-NOTES.md) and
+[ADR 6](docs/decisions/0006-mcp-over-supabase-oauth.md).
+
 ## Migrations
 
 `drizzle/0000_init.sql` is generated from `db/schema.ts` — never hand-edit it.
