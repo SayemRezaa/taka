@@ -4,14 +4,15 @@ import { bucketsBetween, dayLabel, monthLabel, rangeLabel } from "@/lib/dates";
 import { TrendChart, type ChartSeries } from "./trend-chart";
 import type { Grain, SeriesPoint, DomainTotal } from "@/db/queries";
 import type { Domain, EntryKind } from "@/db/schema";
+import { KIND_ORDER, KIND_LABEL, KIND_COLOUR, KIND_SHORT } from "@/lib/kinds";
 
 export type ChartType = "area" | "bar";
 
-const KINDS: [EntryKind, string, string][] = [
-  ["expense", "Money out", "var(--out)"],
-  ["income", "Money in", "var(--in)"],
-  ["savings", "Set aside", "var(--saved)"],
-];
+const KINDS: [EntryKind, string, string][] = KIND_ORDER.map((k) => [
+  k,
+  KIND_LABEL[k],
+  KIND_COLOUR[k],
+]);
 
 const ALL_GRAINS: [Grain, string][] = [
   ["day", "Daily"],

@@ -12,6 +12,9 @@ import {
   entriesInRange,
   dataBounds,
   monthsWithData,
+  listEarmarks,
+  earmarkBalances,
+  totalsByKindAllTime,
   type Grain,
 } from "@/db/queries";
 import { formatTaka } from "@/lib/money";
@@ -27,16 +30,19 @@ import {
   defaultGrainForSpan,
 } from "@/lib/dates";
 import type { EntryKind } from "@/db/schema";
+import { KIND_ORDER, KIND_LABEL, KIND_SHORT, KIND_TEXT, spendableNet } from "@/lib/kinds";
 import { AddEntry } from "@/components/add-entry";
 import { EntryList } from "@/components/entry-list";
 import { Breakdown } from "@/components/breakdown";
 import { Analysis, type ChartType } from "@/components/analysis";
 import { DomainManager } from "@/components/domain-manager";
+import { Pots } from "@/components/pots";
 
 const TABS = [
   ["where", "Where it went"],
   ["trend", "Trend"],
   ["entries", "Entries"],
+  ["pots", "Pots"],
   ["domains", "Domains"],
 ] as const;
 
@@ -78,21 +84,29 @@ export default async function LedgerPage({
     ? (sp.grain as Grain)
     : defaultGrainForSpan(span);
 
-  const kind: EntryKind = (["expense", "income", "savings"] as const).includes(
-    sp.kind as EntryKind,
-  )
+  const kind: EntryKind = KIND_ORDER.includes(sp.kind as EntryKind)
     ? (sp.kind as EntryKind)
     : "expense";
   const chart: ChartType = sp.chart === "bar" ? "bar" : "area";
   const split = sp.split === "1";
 
-  const [domainList, totals, rows, months, domainRows] = await Promise.all([
+  const [domainList, totals, rows, months, domainRows, earmarks] =
+    await Promise.all([
     listDomains(user.id),
     monthTotals(user.id, month),
     listEntriesForMonth(user.id, month),
     monthsWithData(user.id),
     tab === "domains" ? listDomainsWithCounts(user.id) : Promise.resolve([]),
+    listEarmarks(user.id),
   ]);
+
+  const potData =
+    tab === "pots"
+      ? await Promise.all([
+          totalsByKindAllTime(user.id),
+          earmarkBalances(user.id),
+        ])
+      : null;
 
   // A domain id from the URL is untrusted: it counts only if it is one of
   // this user's own domains.
@@ -115,7 +129,12 @@ export default async function LedgerPage({
         ])
       : null;
 
-  const net = totals.income - totals.expense - totals.savings;
+  const net = spendableNet(totals);
+  // Only show loan tiles in a month that actually had loan activity; an
+  // always-visible zero is noise for the months there is no debt.
+  const tileKinds = KIND_ORDER.filter(
+    (k) => k === "expense" || k === "income" || k === "savings" || totals[k] > 0,
+  );
   const href = (patch: Record<string, string>) => {
     const merged: Record<string, string> = {
       month,
@@ -142,7 +161,9 @@ export default async function LedgerPage({
           <span className="text-[15px] font-semibold tracking-tight">Ledger</span>
           {/* The trend tab carries its own date range and headline. Showing
               one month's totals above an analysis of six is just confusing. */}
-          <div className={`items-center gap-0.5 ${tab === "trend" ? "hidden" : "flex"}`}>
+          <div className={`items-center gap-0.5 ${
+              tab === "trend" || tab === "pots" ? "hidden" : "flex"
+            }`}>
             <Link
               href={href({ month: shiftMonth(month, -1) })}
               aria-label="Previous month"
@@ -163,7 +184,7 @@ export default async function LedgerPage({
           </div>
         </div>
 
-        {tab !== "trend" && (
+        {tab !== "trend" && tab !== "pots" && (
           <>
             <div className="mt-5">
               <p
@@ -187,9 +208,9 @@ export default async function LedgerPage({
             <div className="mt-5 flex border-t border-rule">
               {(
                 [
-                  ["Came in", totals.income, "text-in"],
-                  ["Went out", totals.expense, "text-out"],
-                  ["Set aside", totals.savings, "text-saved"],
+                  ...tileKinds.map(
+                    (k) => [KIND_SHORT[k], totals[k], KIND_TEXT[k]] as const,
+                  ),
                 ] as const
               ).map(([label, value, colour]) => (
                 <div
@@ -254,7 +275,13 @@ export default async function LedgerPage({
         />
       )}
 
-      {tab === "entries" && <EntryList rows={rows} domains={domainList} />}
+      {tab === "entries" && (
+        <EntryList rows={rows} domains={domainList} earmarks={earmarks} />
+      )}
+
+      {tab === "pots" && potData && (
+        <Pots allTime={potData[0]} pots={potData[1]} />
+      )}
 
       {tab === "domains" && <DomainManager domains={domainRows} />}
 
@@ -269,7 +296,7 @@ export default async function LedgerPage({
         </span>
       </footer>
 
-      <AddEntry domains={domainList} />
+      <AddEntry domains={domainList} earmarks={earmarks} />
     </main>
   );
 }

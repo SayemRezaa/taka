@@ -22,6 +22,9 @@
   --out: #dc2626;
   --in: #059669;
   --saved: #2563eb;
+  /* Loans: money that moved without being earned or consumed. */
+  --loan-in: #7c3aed;
+  --loan-out: #0d9488;
 
   --s1: #4f46e5;
   --s2: #e11d48;
@@ -53,6 +56,8 @@
     --out: #f87171;
     --in: #34d399;
     --saved: #60a5fa;
+    --loan-in: #a78bfa;
+    --loan-out: #2dd4bf;
 
     --s1: #818cf8;
     --s2: #fb7185;
@@ -84,6 +89,8 @@
   --out: #f87171;
   --in: #34d399;
   --saved: #60a5fa;
+  --loan-in: #a78bfa;
+  --loan-out: #2dd4bf;
 
   --s1: #818cf8;
   --s2: #fb7185;
@@ -113,6 +120,8 @@
   --color-out: var(--out);
   --color-in: var(--in);
   --color-saved: var(--saved);
+  --color-loan-in: var(--loan-in);
+  --color-loan-out: var(--loan-out);
 
   --color-s1: var(--s1);
   --color-s2: var(--s2);

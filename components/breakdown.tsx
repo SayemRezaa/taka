@@ -1,16 +1,9 @@
 import { formatTaka } from "@/lib/money";
 import type { EntryKind } from "@/db/schema";
+import { KIND_BG, KIND_TEXT } from "@/lib/kinds";
 
-const BAR: Record<EntryKind, string> = {
-  expense: "bg-out",
-  income: "bg-in",
-  savings: "bg-saved",
-};
-const TEXT: Record<EntryKind, string> = {
-  expense: "text-out",
-  income: "text-in",
-  savings: "text-saved",
-};
+const BAR = KIND_BG;
+const TEXT = KIND_TEXT;
 
 export function Breakdown({
   rows,

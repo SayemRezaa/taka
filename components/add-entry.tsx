@@ -6,20 +6,13 @@ import { addEntry, updateEntry, deleteEntry, addDomain } from "@/app/ledger/acti
 import { parseTaka } from "@/lib/money";
 import { todayISO } from "@/lib/dates";
 import type { Domain, EntryKind } from "@/db/schema";
+import { KIND_BG, KIND_LABEL, KIND_ORDER, KIND_HINT } from "@/lib/kinds";
 
-const KINDS: [EntryKind, string][] = [
-  ["expense", "Money out"],
-  ["income", "Money in"],
-  ["savings", "Set aside"],
-];
+const KINDS: [EntryKind, string][] = KIND_ORDER.map((k) => [k, KIND_LABEL[k]]);
 
 const METHODS = ["Cash", "bKash", "Nagad", "Card", "Bank"];
 
-const KIND_BG: Record<EntryKind, string> = {
-  expense: "bg-out",
-  income: "bg-in",
-  savings: "bg-saved",
-};
+
 
 export type EditTarget = {
   id: string;
@@ -29,14 +22,17 @@ export type EditTarget = {
   kind: EntryKind;
   method: string | null;
   note: string | null;
+  earmark: string | null;
 };
 
 export function AddEntry({
   domains,
+  earmarks,
   editing,
   onClose,
 }: {
   domains: Domain[];
+  earmarks: string[];
   editing?: EditTarget;
   onClose?: () => void;
 }) {
@@ -58,15 +54,24 @@ export function AddEntry({
     );
   }
 
-  return <Sheet domains={domains} editing={editing} onClose={close} />;
+  return (
+    <Sheet
+      domains={domains}
+      earmarks={earmarks}
+      editing={editing}
+      onClose={close}
+    />
+  );
 }
 
 function Sheet({
   domains,
+  earmarks,
   editing,
   onClose,
 }: {
   domains: Domain[];
+  earmarks: string[];
   editing?: EditTarget;
   onClose: () => void;
 }) {
@@ -81,6 +86,7 @@ function Sheet({
   const [occurredOn, setOccurredOn] = useState(editing?.occurredOn ?? todayISO());
   const [method, setMethod] = useState(editing?.method ?? "Cash");
   const [note, setNote] = useState(editing?.note ?? "");
+  const [earmark, setEarmark] = useState(editing?.earmark ?? "");
   const [error, setError] = useState("");
 
   const [newName, setNewName] = useState("");
@@ -106,6 +112,7 @@ function Sheet({
         kind,
         method: method || null,
         note: note.trim() || null,
+        earmark: earmark.trim() || null,
       };
       const res = editing
         ? await updateEntry({ ...payload, id: editing.id })
@@ -264,6 +271,27 @@ function Sheet({
           placeholder="Optional — what was it for?"
           className="w-full rounded border border-rule bg-paper px-3 py-2.5 text-[15px] outline-none focus:border-ink"
         />
+
+        {/* Earmark. Typing a label already in use is what links this entry to
+            the money it came from, so the list is offered rather than left to
+            memory — "Tuition Nov" and "tuition nov" would be two pots. */}
+        <label htmlFor="em" className="mb-1.5 mt-4 block text-xs text-muted">
+          Pot <span className="text-faint">— optional</span>
+        </label>
+        <input
+          id="em"
+          list="earmark-options"
+          value={earmark}
+          onChange={(e) => setEarmark(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
+          placeholder="e.g. Tuition Nov — links money in to money out"
+          className="w-full rounded border border-rule bg-paper px-3 py-2.5 text-[15px] outline-none focus:border-ink"
+        />
+        <datalist id="earmark-options">
+          {earmarks.map((e) => (
+            <option key={e} value={e} />
+          ))}
+        </datalist>
 
         {error && <p className="mt-3 text-xs text-out">{error}</p>}
 

@@ -5,12 +5,9 @@ import { formatTaka } from "@/lib/money";
 import { dayLabel } from "@/lib/dates";
 import { AddEntry, type EditTarget } from "./add-entry";
 import type { Domain, EntryKind } from "@/db/schema";
+import { KIND_TEXT, KIND_SIGN } from "@/lib/kinds";
 
-const TEXT: Record<EntryKind, string> = {
-  expense: "text-out",
-  income: "text-in",
-  savings: "text-saved",
-};
+const TEXT = KIND_TEXT;
 
 type Row = {
   id: string;
@@ -19,11 +16,20 @@ type Row = {
   kind: EntryKind;
   method: string | null;
   note: string | null;
+  earmark: string | null;
   domainId: string;
   domainName: string;
 };
 
-export function EntryList({ rows, domains }: { rows: Row[]; domains: Domain[] }) {
+export function EntryList({
+  rows,
+  domains,
+  earmarks,
+}: {
+  rows: Row[];
+  domains: Domain[];
+  earmarks: string[];
+}) {
   const [editing, setEditing] = useState<EditTarget | null>(null);
 
   if (rows.length === 0) {
@@ -51,7 +57,7 @@ export function EntryList({ rows, domains }: { rows: Row[]; domains: Domain[] })
               </p>
             </div>
             <span className={`num whitespace-nowrap text-[14.5px] font-medium ${TEXT[r.kind]}`}>
-              {r.kind === "income" ? "+" : "−"}
+              {KIND_SIGN[r.kind] > 0 ? "+" : "−"}
               {formatTaka(r.amountMinor)}
             </span>
           </button>
@@ -61,6 +67,7 @@ export function EntryList({ rows, domains }: { rows: Row[]; domains: Domain[] })
       {editing && (
         <AddEntry
           domains={domains}
+          earmarks={earmarks}
           editing={editing}
           onClose={() => setEditing(null)}
         />

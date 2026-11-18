@@ -1,7 +1,8 @@
-import { and, desc, eq, gte, lt, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, lt, lte, sql } from "drizzle-orm";
 import { db } from "./index";
 import { domains, entries, type EntryKind } from "./schema";
 import { monthBounds } from "@/lib/dates";
+import { emptyTotals } from "@/lib/kinds";
 
 /**
  * Every function here takes userId as its first argument and filters on it.
@@ -55,6 +56,7 @@ export async function listEntriesForMonth(userId: string, month: string) {
       kind: entries.kind,
       method: entries.method,
       note: entries.note,
+      earmark: entries.earmark,
       domainId: entries.domainId,
       domainName: domains.name,
     })
@@ -92,7 +94,7 @@ export async function monthTotals(
     )
     .groupBy(entries.kind);
 
-  const out: MonthTotals = { expense: 0, income: 0, savings: 0 };
+  const out: MonthTotals = emptyTotals();
   for (const r of rows) out[r.kind] = Number(r.total);
   return out;
 }
@@ -361,7 +363,7 @@ export async function totalsByKindForRange(
     )
     .groupBy(entries.kind);
 
-  const out: MonthTotals = { expense: 0, income: 0, savings: 0 };
+  const out: MonthTotals = emptyTotals();
   for (const r of rows) out[r.kind] = Number(r.total);
   return out;
 }
@@ -384,4 +386,91 @@ export async function getEntry(userId: string, id: string) {
     .where(and(eq(entries.id, id), eq(entries.userId, userId)))
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * Earmark labels already in use, most recently used first.
+ *
+ * Fed to the entry form as suggestions. Free text splits a pot the moment
+ * you type "Tuition nov" instead of "Tuition Nov", and offering the existing
+ * labels is what stops that happening in practice.
+ */
+export async function listEarmarks(userId: string): Promise<string[]> {
+  const rows = await db
+    .select({
+      earmark: entries.earmark,
+      lastUsed: sql<string>`max(${entries.occurredOn})`,
+    })
+    .from(entries)
+    .where(and(eq(entries.userId, userId), isNotNull(entries.earmark)))
+    .groupBy(entries.earmark)
+    .orderBy(sql`max(${entries.occurredOn}) desc`)
+    .limit(50);
+  return rows.map((r) => r.earmark!).filter(Boolean);
+}
+
+export type EarmarkBalance = {
+  earmark: string;
+  inMinor: number;
+  outMinor: number;
+  remainingMinor: number;
+  entries: number;
+  firstOn: string;
+  lastOn: string;
+};
+
+/**
+ * One pot of money per label: what came in for it, what went out against it,
+ * and what is therefore left.
+ *
+ * "In" is anything that put cash in your hand for this purpose (income or
+ * borrowing); "out" is anything that took cash back out (spending, setting
+ * aside, repaying). Summed by Postgres rather than in JavaScript.
+ */
+export async function earmarkBalances(
+  userId: string,
+): Promise<EarmarkBalance[]> {
+  const rows = await db
+    .select({
+      earmark: entries.earmark,
+      inMinor: sql<string>`sum(case when ${entries.kind} in ('income','loan_in') then ${entries.amountMinor} else 0 end)`,
+      outMinor: sql<string>`sum(case when ${entries.kind} in ('expense','savings','loan_out') then ${entries.amountMinor} else 0 end)`,
+      count: sql<string>`count(*)`,
+      firstOn: sql<string>`min(${entries.occurredOn})`,
+      lastOn: sql<string>`max(${entries.occurredOn})`,
+    })
+    .from(entries)
+    .where(and(eq(entries.userId, userId), isNotNull(entries.earmark)))
+    .groupBy(entries.earmark)
+    .orderBy(sql`max(${entries.occurredOn}) desc`);
+
+  return rows.map((r) => {
+    const inMinor = Number(r.inMinor);
+    const outMinor = Number(r.outMinor);
+    return {
+      earmark: r.earmark!,
+      inMinor,
+      outMinor,
+      remainingMinor: inMinor - outMinor,
+      entries: Number(r.count),
+      firstOn: r.firstOn,
+      lastOn: r.lastOn,
+    };
+  });
+}
+
+/** Totals per kind over all time — what outstanding debt is computed from. */
+export async function totalsByKindAllTime(userId: string): Promise<MonthTotals> {
+  const rows = await db
+    .select({
+      kind: entries.kind,
+      total: sql<string>`sum(${entries.amountMinor})`,
+    })
+    .from(entries)
+    .where(eq(entries.userId, userId))
+    .groupBy(entries.kind);
+
+  const out: MonthTotals = emptyTotals();
+  for (const r of rows) out[r.kind] = Number(r.total);
+  return out;
 }

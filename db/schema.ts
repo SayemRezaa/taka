@@ -14,13 +14,24 @@ import {
 import { sql } from "drizzle-orm";
 
 /**
- * Three kinds of money movement.
+ * Five kinds of money movement.
  *
  * `savings` is deliberately NOT an expense: money set aside leaves your
  * spendable balance but has not been consumed. Folding it into `expense`
  * would make saving look identical to losing.
+ *
+ * `loan_in` and `loan_out` are the same argument for debt. Borrowing is not
+ * income — you owe it. Repaying is not an expense — the money was already
+ * counted when it arrived. Two values rather than one `loan` kind plus a
+ * direction column: a single kind cannot say which way the money moved.
  */
-export const entryKind = pgEnum("entry_kind", ["expense", "income", "savings"]);
+export const entryKind = pgEnum("entry_kind", [
+  "expense",
+  "income",
+  "savings",
+  "loan_in",
+  "loan_out",
+]);
 
 /**
  * User-defined categories. The whole point is that these are added over
@@ -68,6 +79,13 @@ export const entries = pgTable(
     kind: entryKind("kind").notNull(),
     method: text("method"),
     note: text("note"),
+    /**
+     * Optional label grouping entries that belong to one pot of money: cash
+     * received for a stated purpose, what actually went to that purpose, and
+     * therefore what is left over. Free text, suggested from values already
+     * in use so a pot does not split on a typo.
+     */
+    earmark: text("earmark"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -79,6 +97,7 @@ export const entries = pgTable(
     // Every read is "this user, this date range" — this index carries the app.
     index("entries_user_date_idx").on(t.userId, t.occurredOn.desc()),
     index("entries_user_domain_idx").on(t.userId, t.domainId),
+    index("entries_user_earmark_idx").on(t.userId, t.earmark),
     check("entries_amount_positive", sql`${t.amountMinor} > 0`),
   ],
 );

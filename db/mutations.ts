@@ -29,6 +29,7 @@ export type EntryInput = {
   kind: EntryKind;
   method?: string | null;
   note?: string | null;
+  earmark?: string | null;
 };
 
 export async function createEntry(
@@ -58,6 +59,7 @@ export async function createEntry(
       kind: input.kind,
       method: input.method ?? null,
       note: input.note ?? null,
+      earmark: input.earmark ?? null,
     })
     .returning({ id: entries.id });
 
@@ -90,6 +92,7 @@ export async function editEntry(
       kind: input.kind,
       method: input.method ?? null,
       note: input.note ?? null,
+      earmark: input.earmark ?? null,
     })
     .where(and(eq(entries.id, id), eq(entries.userId, userId)))
     .returning({ id: entries.id });

@@ -9,18 +9,11 @@ import {
   deleteDomain,
 } from "@/app/ledger/actions";
 import type { EntryKind } from "@/db/schema";
+import { KIND_COLOUR, KIND_LABEL, KIND_ORDER } from "@/lib/kinds";
 
-const GROUPS: [EntryKind, string][] = [
-  ["expense", "Money out"],
-  ["income", "Money in"],
-  ["savings", "Set aside"],
-];
+const GROUPS: [EntryKind, string][] = KIND_ORDER.map((k) => [k, KIND_LABEL[k]]);
 
-const DOT: Record<EntryKind, string> = {
-  expense: "var(--out)",
-  income: "var(--in)",
-  savings: "var(--saved)",
-};
+const DOT = KIND_COLOUR;
 
 export type DomainRow = {
   id: string;

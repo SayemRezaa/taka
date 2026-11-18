@@ -20,7 +20,13 @@ import { requireUser } from "@/lib/supabase/server";
  * payload. Everything crossing this boundary is untrusted.
  */
 
-const kind = z.enum(["expense", "income", "savings"]);
+const kind = z.enum([
+  "expense",
+  "income",
+  "savings",
+  "loan_in",
+  "loan_out",
+]);
 
 const entryInput = z.object({
   amountMinor: z.number().int().positive().max(100_000_000_00),
@@ -29,6 +35,7 @@ const entryInput = z.object({
   kind,
   method: z.string().trim().max(40).optional().nullable(),
   note: z.string().trim().max(200).optional().nullable(),
+  earmark: z.string().trim().max(60).optional().nullable(),
 });
 
 const domainInput = z.object({
