@@ -6,11 +6,13 @@ import type { Grain, SeriesPoint, DomainTotal } from "@/db/queries";
 import type { Domain, EntryKind } from "@/db/schema";
 import { KIND_ORDER, KIND_LABEL, KIND_COLOUR, KIND_SHORT } from "@/lib/kinds";
 
-export type ChartType = "area" | "bar";
+export type ChartType = "area" | "bar" | "compare";
 
 const KINDS: [EntryKind, string, string][] = KIND_ORDER.map((k) => [
   k,
-  KIND_LABEL[k],
+  // Short forms: five full labels ("Money out", "Loan repaid", ...) wrap to
+  // two lines at phone width and the control stops reading as one thing.
+  KIND_SHORT[k],
   KIND_COLOUR[k],
 ]);
 
@@ -30,9 +32,28 @@ const SERIES_COLOURS = [
   "var(--s6)",
   "var(--s7)",
   "var(--s8)",
+  "var(--s9)",
+  "var(--s10)",
+  "var(--s11)",
+  "var(--s12)",
 ];
 const OTHER = "var(--faint)";
-const TOP_N = 8;
+/**
+ * How many categories get their own colour in the legend. Twelve, not eight:
+ * with thirteen expense categories, eight meant five never appeared as
+ * themselves, which is the opposite of what a breakdown is for.
+ */
+const TOP_N = 12;
+
+/**
+ * How many get drawn as separate series on the time chart — far fewer.
+ *
+ * These are different questions. The legend is a ranked list and copes with
+ * thirteen rows; the chart is thirteen curves bunched on one baseline, which
+ * is unreadable no matter how good the colours are. The rest fold into
+ * "Other", and tapping any legend row still isolates that one category.
+ */
+const CHART_MAX = 6;
 
 type EntryRow = {
   id: string;
@@ -54,7 +75,7 @@ function Segment({
   hrefFor: (v: string) => string;
 }) {
   return (
-    <div className="inline-flex rounded-control border border-border bg-sunk p-0.5">
+    <div className="inline-flex max-w-full overflow-x-auto rounded-control border border-border bg-sunk p-0.5">
       {options.map((o) => {
         const on = o.value === current;
         const base =
@@ -103,6 +124,7 @@ export function Analysis({
   domains,
   series,
   domainTotals,
+  previousByDomain,
   previousTotal,
   recent,
   recentLimit,
@@ -121,6 +143,7 @@ export function Analysis({
   domains: Domain[];
   series: SeriesPoint[];
   domainTotals: DomainTotal[];
+  previousByDomain: DomainTotal[];
   previousTotal: number | null;
   recent: EntryRow[];
   recentLimit: number;
@@ -168,26 +191,28 @@ export function Analysis({
       },
     ];
   } else if (split) {
+    const charted = ranked.slice(0, CHART_MAX);
+    const chartedIds = new Set(charted.map((d) => d.domainId));
     const byKey = new Map<string, number[]>();
     for (const p of series) {
       const i = index.get(p.bucket);
       if (i === undefined) continue;
-      const key = colourOf.has(p.domainId) ? p.domainId : "other";
+      const key = chartedIds.has(p.domainId) ? p.domainId : "other";
       if (!byKey.has(key)) byKey.set(key, zeros());
       byKey.get(key)![i] += p.total;
     }
     chartSeries = [
-      ...shown.map((d) => ({
+      ...charted.map((d) => ({
         key: d.domainId,
         name: d.domainName,
         colour: colourOf.get(d.domainId)!,
         values: byKey.get(d.domainId) ?? zeros(),
       })),
-      ...(ranked.length > TOP_N
+      ...(ranked.length > CHART_MAX
         ? [
             {
               key: "other",
-              name: "Other (" + (ranked.length - TOP_N) + ")",
+              name: "Other (" + (ranked.length - CHART_MAX) + ")",
               colour: OTHER,
               values: byKey.get("other") ?? zeros(),
             },
@@ -319,6 +344,13 @@ export function Analysis({
         )}
 
         <div className="mt-3">
+          {chart === "compare" ? (
+            <Compare
+              current={ranked}
+              previous={previousByDomain.filter((d) => d.kind === kind)}
+              colourOf={colourOf}
+            />
+          ) : (
           <TrendChart
             labels={labels}
             series={chartSeries}
@@ -330,6 +362,7 @@ export function Analysis({
               " in this period."
             }
           />
+          )}
         </div>
 
         {/* every grain stays visible; the ones that will not fit say why */}
@@ -350,6 +383,7 @@ export function Analysis({
             options={[
               { value: "area", label: "Curve" },
               { value: "bar", label: "Bars" },
+              { value: "compare", label: "vs before" },
             ]}
             current={chart}
             hrefFor={(c) => href({ chart: c })}
@@ -422,9 +456,10 @@ export function Analysis({
               );
             })}
           </div>
-          {ranked.length > TOP_N && (
+          {split && ranked.length > CHART_MAX && (
             <p className="px-3.5 pb-3 pt-2 text-micro text-faint">
-              Top {TOP_N} are charted; the rest group as Other.
+              Top {CHART_MAX} are drawn separately; the rest group as Other.
+              Tap any row to chart it on its own.
             </p>
           )}
         </section>
@@ -465,6 +500,103 @@ export function Analysis({
           </div>
         </section>
       )}
+    </div>
+  );
+}
+
+/**
+ * This period against the one before it, per category.
+ *
+ * Neither a curve nor a stacked bar answers "am I spending more than last
+ * month, and on what" — you have to hold two charts in your head. This puts
+ * the change itself on the page: bars diverge from a centre line, right for
+ * more than before, left for less, sorted by how much moved.
+ */
+function Compare({
+  current,
+  previous,
+  colourOf,
+}: {
+  current: DomainTotal[];
+  previous: DomainTotal[];
+  colourOf: Map<string, string>;
+}) {
+  const before = new Map(previous.map((d) => [d.domainId, d.total]));
+  const names = new Map<string, string>();
+  for (const d of [...current, ...previous]) names.set(d.domainId, d.domainName);
+
+  const rows = [...new Set([...names.keys()])]
+    .map((id) => {
+      const now = current.find((d) => d.domainId === id)?.total ?? 0;
+      const then = before.get(id) ?? 0;
+      return { id, name: names.get(id)!, now, then, delta: now - then };
+    })
+    .filter((r) => r.now > 0 || r.then > 0)
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+
+  if (rows.length === 0) {
+    return (
+      <p className="py-10 text-center text-small text-muted">
+        Nothing in either period to compare.
+      </p>
+    );
+  }
+
+  const widest = Math.max(...rows.map((r) => Math.abs(r.delta)), 1);
+  const totalDelta = rows.reduce((a, r) => a + r.delta, 0);
+
+  return (
+    <div>
+      <p className="mb-3 text-small">
+        <span className="num font-semibold" style={{ color: totalDelta > 0 ? "var(--out)" : "var(--in)" }}>
+          {totalDelta > 0 ? "▲" : "▼"} {formatTaka(Math.abs(totalDelta))}
+        </span>{" "}
+        <span className="text-muted">
+          {totalDelta > 0 ? "more" : "less"} than the period before
+        </span>
+      </p>
+
+      <div className="rows">
+        {rows.map((r) => {
+          const up = r.delta > 0;
+          const pct = (Math.abs(r.delta) / widest) * 50; // half-width each side
+          return (
+            <div key={r.id} className="py-2">
+              <div className="flex items-baseline gap-2">
+                <i
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ background: colourOf.get(r.id) ?? OTHER }}
+                />
+                <span className="min-w-0 flex-1 truncate text-small">{r.name}</span>
+                <span
+                  className="num shrink-0 text-small font-medium"
+                  style={{ color: r.delta === 0 ? "var(--muted)" : up ? "var(--out)" : "var(--in)" }}
+                >
+                  {r.delta === 0 ? "—" : (up ? "+" : "−") + formatTaka(Math.abs(r.delta))}
+                </span>
+              </div>
+
+              {/* centre line with the change diverging from it */}
+              <div className="relative mt-1 h-2">
+                <div className="absolute inset-y-0 left-1/2 w-px bg-border" />
+                <div
+                  className="absolute top-0.5 h-1 rounded-full"
+                  style={{
+                    width: pct + "%",
+                    left: up ? "50%" : undefined,
+                    right: up ? undefined : "50%",
+                    background: up ? "var(--out)" : "var(--in)",
+                  }}
+                />
+              </div>
+
+              <p className="num mt-0.5 text-micro text-faint">
+                {formatTaka(r.then)} → {formatTaka(r.now)}
+              </p>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

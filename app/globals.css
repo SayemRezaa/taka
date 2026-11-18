@@ -34,6 +34,10 @@
   --s6: #65a30d;
   --s7: #0284c7;
   --s8: #db2777;
+  --s9: #0891b2;
+  --s10: #ca8a04;
+  --s11: #9333ea;
+  --s12: #15803d;
 
   --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 4px 12px rgb(16 24 40 / 0.05);
   --shadow-pop: 0 4px 12px rgb(16 24 40 / 0.08), 0 12px 32px rgb(16 24 40 / 0.10);
@@ -67,6 +71,14 @@
     --s6: #a3e635;
     --s7: #38bdf8;
     --s8: #f472b6;
+  --s9: #22d3ee;
+  --s10: #facc15;
+  --s11: #c084fc;
+  --s12: #4ade80;
+    --s9: #22d3ee;
+    --s10: #facc15;
+    --s11: #c084fc;
+    --s12: #4ade80;
 
     --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
     --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.55);
@@ -131,6 +143,10 @@
   --color-s6: var(--s6);
   --color-s7: var(--s7);
   --color-s8: var(--s8);
+  --color-s9: var(--s9);
+  --color-s10: var(--s10);
+  --color-s11: var(--s11);
+  --color-s12: var(--s12);
 
   /* Aliases kept so components not yet migrated still compile. Remove once
      breakdown / entry-list / add-entry / domain-manager are rebuilt. */

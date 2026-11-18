@@ -28,6 +28,7 @@ import {
   spanDays,
   grainsForSpan,
   defaultGrainForSpan,
+  previousPeriod,
 } from "@/lib/dates";
 import type { EntryKind } from "@/db/schema";
 import { KIND_ORDER, KIND_LABEL, KIND_SHORT, KIND_TEXT, spendableNet } from "@/lib/kinds";
@@ -87,7 +88,8 @@ export default async function LedgerPage({
   const kind: EntryKind = KIND_ORDER.includes(sp.kind as EntryKind)
     ? (sp.kind as EntryKind)
     : "expense";
-  const chart: ChartType = sp.chart === "bar" ? "bar" : "area";
+  const chart: ChartType =
+    sp.chart === "bar" ? "bar" : sp.chart === "compare" ? "compare" : "area";
   const split = sp.split === "1";
 
   const [domainList, totals, rows, months, domainRows, earmarks] =
@@ -118,6 +120,11 @@ export default async function LedgerPage({
       ? await Promise.all([
           trendByDomain(user.id, { grain, from, to, kind, domainId }),
           domainTotalsForRange(user.id, from, to),
+          domainTotalsForRange(
+            user.id,
+            previousPeriod(from, to).from,
+            previousPeriod(from, to).to,
+          ),
           entriesInRange(user.id, {
             from,
             to,
@@ -258,7 +265,7 @@ export default async function LedgerPage({
           from={from}
           to={to}
           today={today}
-          bounds={analysis[3]}
+          bounds={analysis[4]}
           grain={grain}
           grains={grains}
           kind={kind}
@@ -269,7 +276,8 @@ export default async function LedgerPage({
           domains={domainList}
           series={analysis[0]}
           domainTotals={analysis[1]}
-          recent={analysis[2]}
+          previousByDomain={analysis[2]}
+          recent={analysis[3]}
           recentLimit={RECENT_LIMIT}
           href={href}
         />

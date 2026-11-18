@@ -102,7 +102,7 @@ export function TrendChart({
   const plotW = Math.max(0, w - PAD_L - PAD_R);
   const stepX = n > 1 ? plotW / (n - 1) : 0;
   const barStep = plotW / Math.max(1, n);
-  const barW = Math.min(26, barStep * 0.6);
+  const barW = Math.min(30, barStep * 0.68);
 
   const stacked = labels.map((_, i) =>
     series.reduce((a, s) => a + (s.values[i] ?? 0), 0),
@@ -173,7 +173,7 @@ export function TrendChart({
                 x2="0"
                 y2="1"
               >
-                <stop offset="0%" stopColor={s.colour} stopOpacity="0.22" />
+                <stop offset="0%" stopColor={s.colour} stopOpacity="0.32" />
                 <stop offset="100%" stopColor={s.colour} stopOpacity="0" />
               </linearGradient>
             ))}
@@ -197,8 +197,8 @@ export function TrendChart({
                     x={PAD_L - 8}
                     y={ty + 3.5}
                     textAnchor="end"
-                    fontSize="10"
-                    fill="var(--faint)"
+                    fontSize="10.5"
+                    fill="var(--muted)"
                     fontFamily="var(--font-mono)"
                   >
                     {formatTakaCompact(max * t)}
@@ -272,7 +272,7 @@ export function TrendChart({
                       d={line}
                       fill="none"
                       stroke={s.colour}
-                      strokeWidth="2.25"
+                      strokeWidth="3"
                       strokeLinecap="round"
                       strokeLinejoin="round"
                     />
@@ -280,10 +280,10 @@ export function TrendChart({
                       <circle
                         cx={xOf(hv)}
                         cy={y(s.values[hv])}
-                        r="4"
+                        r="4.5"
                         fill="var(--card)"
                         stroke={s.colour}
-                        strokeWidth="2.5"
+                        strokeWidth="3"
                       />
                     )}
                   </g>

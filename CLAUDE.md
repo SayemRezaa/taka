@@ -98,9 +98,12 @@ clause. New queries in `db/queries.ts` take `userId` as their first argument.
 endpoints. Anything crossing that boundary gets parsed by a Zod schema before
 use. Client-side validation is UX only.
 
-**5. `savings` is not `expense`.** Money set aside reduces the spendable
-balance but is not consumed. It is excluded from "where it went" percentages.
-Do not collapse the two kinds.
+**5. `savings` is not `expense`, and neither are loans.** Money set aside
+reduces the spendable balance but is not consumed. Borrowing is not income —
+you owe it. Repaying is not spending — the money was counted when it arrived.
+Only `expense` belongs in "where it went" percentages. `spendableNet()` in
+`lib/kinds.ts` is the one place that knows which direction each kind moves;
+do not re-derive it.
 
 ## Conventions
 
@@ -213,9 +216,13 @@ Also open, smaller:
   works and the build only warns. The codemod is
   `npx @next/codemod@canary middleware-to-proxy .` — this is auth-critical,
   so do it on its own and test sign-in before and after.
-- A loan / borrowing kind was designed and deliberately deferred. It needs a
-  fourth enum value plus a direction column, so it is a migration, not an
-  edit. Do not add it as a plain domain — that inflates the spending totals.
+- Entry kinds now number five. `lib/kinds.ts` is the only place that knows
+  their labels, colours and signs — add a kind there, not in a component.
+  Repaying a loan is `loan_out`, never `expense`; the money was counted when
+  it arrived. See [ADR 7](docs/decisions/0007-loans-and-earmarks.md).
+- `entries.earmark` groups entries into a pot: money received for a purpose,
+  what reached that purpose, what is left. Free text, suggested from values
+  in use.
 
 Deliberately not doing: streaks or gamification, bank integrations,
 multi-currency, shared accounts. See the requirements doc for why.

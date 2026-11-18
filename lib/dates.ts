@@ -158,3 +158,22 @@ export function monthBoundsInclusive(isoDate: string): { from: string; to: strin
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
   return { from: `${y}-${pad(m)}-01`, to: `${y}-${pad(m)}-${pad(last)}` };
 }
+
+/** Shift a date by whole days. Used to build the period before this one. */
+export function addDays(isoDate: string, days: number): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  return isoOf(Date.UTC(y, m - 1, d) + days * 86_400_000);
+}
+
+/**
+ * The period immediately before this one, the same length.
+ *
+ * "Am I spending more than last month" needs a like-for-like comparison, and
+ * a 17-day range has to be compared against the previous 17 days, not the
+ * previous calendar month.
+ */
+export function previousPeriod(from: string, to: string): { from: string; to: string } {
+  const span = spanDays(from, to);
+  const prevTo = addDays(from, -1);
+  return { from: addDays(prevTo, -span), to: prevTo };
+}

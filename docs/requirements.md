@@ -30,6 +30,8 @@ Not a budgeting app. It records what happened; it does not police what should.
 - [ ] CSV export
 - [ ] Month-close screen: what changed vs last month, one reflective question
 - [x] Archive a domain without deleting its history
+- [x] Loans tracked as their own kinds, not as expense categories
+- [x] Earmarked pots: money received for a purpose vs what reached it
 - [x] MCP connector so an assistant can log entries live
       (see [ADR 6](decisions/0006-mcp-over-supabase-oauth.md))
 
